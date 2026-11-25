@@ -1,5 +1,5 @@
 module "ec2" {
-  source                      = "git::https://github.com/my-org/terraform-ec2-module.git"
+  source                      = "git::https://github.com/tecknuovo-org/terraform-modules-aws/ec2-module.git"
   create                      = true
   name                        = "ecs-container-host"
   ami                         = var.ec2_ecs_base
