@@ -1,10 +1,8 @@
 
-# Retrieve the latest ECS-optimized Amazon Linux 2023 AMI
 data "aws_ssm_parameter" "ecs_ami" {
   name = "/aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id"
 }
 
-# IAM role assumed by the EC2 instance
 resource "aws_iam_role" "ecs_instance_role" {
   name = "ecs-ec2-instance-role"
 
@@ -20,46 +18,29 @@ resource "aws_iam_role" "ecs_instance_role" {
   })
 }
 
-# Permissions required for ECS container instances
 resource "aws_iam_role_policy_attachment" "ecs_instance_policy" {
   role = aws_iam_role.ecs_instance_role.name
 
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
 }
 
-# Instance profile
 resource "aws_iam_instance_profile" "ecs_instance_profile" {
   name = "ecs-ec2-instance-profile"
   role = aws_iam_role.ecs_instance_role.name
 }
 
-# EC2 instance
 module "ec2" {
   source = "terraform-aws-modules/ec2-instance/aws"
-
   create = true
-
   name = "ecs-container-host"
-
   ami           = data.aws_ssm_parameter.ecs_ami.value
   instance_type = "t3.medium"
-
   subnet_id = var.subnet_id
-
   key_name = var.key_name
-
   monitoring                  = true
   associate_public_ip_address = true
-
   vpc_security_group_ids = var.vpc_security_group_ids
-
   iam_instance_profile = aws_iam_instance_profile.ecs_instance_profile.name
-
-  user_data = <<-EOF
-    #!/bin/bash
-    echo "ECS_CLUSTER=${var.ecs_cluster_name}" >> /etc/ecs/ecs.config
-  EOF
-
   root_block_device = [
     {
       volume_type = "gp3"
@@ -67,7 +48,6 @@ module "ec2" {
       encrypted   = true
     }
   ]
-
   tags = {
     Name        = "ecs-container-host"
     Environment = "dev"
