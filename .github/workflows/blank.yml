@@ -1,46 +1,15 @@
-
-data "aws_ssm_parameter" "ecs_ami" {
-  name = "/aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id"
-}
-
-resource "aws_iam_role" "ecs_instance_role" {
-  name = "ecs-ec2-instance-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Service = "ec2.amazonaws.com"
-      }
-      Action = "sts:AssumeRole"
-    }]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "ecs_instance_policy" {
-  role = aws_iam_role.ecs_instance_role.name
-
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
-}
-
-resource "aws_iam_instance_profile" "ecs_instance_profile" {
-  name = "ecs-ec2-instance-profile"
-  role = aws_iam_role.ecs_instance_role.name
-}
-
 module "ec2" {
-  source = "terraform-aws-modules/ec2-instance/aws"
-  create = true
-  name = "ecs-container-host"
-  ami           = var.ec2_ecs_base_ami
-  instance_type = "t3.medium"
-  subnet_id = var.subnet_id
-  key_name = var.key_name
+  source                      = "git::https://github.com/my-org/terraform-ec2-module.git"
+  create                      = true
+  name                        = "ecs-container-host"
+  ami                         = var.ec2_ecs_base
+  instance_type               = "t3.medium"
+  subnet_id                   = var.subnet_id
+  key_name                    = var.key_name
   monitoring                  = true
   associate_public_ip_address = true
-  vpc_security_group_ids = var.vpc_security_group_ids
-  iam_instance_profile = aws_iam_instance_profile.ecs_instance_profile.name
+  vpc_security_group_ids      = var.vpc_security_group_ids
+  
   root_block_device = [
     {
       volume_type = "gp3"
@@ -48,9 +17,6 @@ module "ec2" {
       encrypted   = true
     }
   ]
-  tags = {
-    Name        = "ecs-container-host"
-    Environment = "dev"
-    ManagedBy   = "terraform"
-  }
+  
+  tags = local.tags
 }
