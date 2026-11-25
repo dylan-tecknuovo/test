@@ -1,36 +1,76 @@
-# This is a basic workflow to help you get started with Actions
 
-name: CI
+# Retrieve the latest ECS-optimized Amazon Linux 2023 AMI
+data "aws_ssm_parameter" "ecs_ami" {
+  name = "/aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id"
+}
 
-# Controls when the workflow will run
-on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+# IAM role assumed by the EC2 instance
+resource "aws_iam_role" "ecs_instance_role" {
+  name = "ecs-ec2-instance-role"
 
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "ec2.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
-jobs:
-  # This workflow contains a single job called "build"
-  build:
-    # The type of runner that the job will run on
-    runs-on: ubuntu-latest
+# Permissions required for ECS container instances
+resource "aws_iam_role_policy_attachment" "ecs_instance_policy" {
+  role = aws_iam_role.ecs_instance_role.name
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
-    steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
+}
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
+# Instance profile
+resource "aws_iam_instance_profile" "ecs_instance_profile" {
+  name = "ecs-ec2-instance-profile"
+  role = aws_iam_role.ecs_instance_role.name
+}
 
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
-        run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+# EC2 instance
+module "ec2" {
+  source = "terraform-aws-modules/ec2-instance/aws"
+
+  create = true
+
+  name = "ecs-container-host"
+
+  ami           = data.aws_ssm_parameter.ecs_ami.value
+  instance_type = "t3.medium"
+
+  subnet_id = var.subnet_id
+
+  key_name = var.key_name
+
+  monitoring                  = true
+  associate_public_ip_address = true
+
+  vpc_security_group_ids = var.vpc_security_group_ids
+
+  iam_instance_profile = aws_iam_instance_profile.ecs_instance_profile.name
+
+  user_data = <<-EOF
+    #!/bin/bash
+    echo "ECS_CLUSTER=${var.ecs_cluster_name}" >> /etc/ecs/ecs.config
+  EOF
+
+  root_block_device = [
+    {
+      volume_type = "gp3"
+      volume_size = 30
+      encrypted   = true
+    }
+  ]
+
+  tags = {
+    Name        = "ecs-container-host"
+    Environment = "dev"
+    ManagedBy   = "terraform"
+  }
+}
