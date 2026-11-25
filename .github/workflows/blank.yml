@@ -33,7 +33,7 @@ module "ec2" {
   source = "terraform-aws-modules/ec2-instance/aws"
   create = true
   name = "ecs-container-host"
-  ami           = data.aws_ssm_parameter.ecs_ami.value
+  ami           = var.ec2_ecs_base_ami
   instance_type = "t3.medium"
   subnet_id = var.subnet_id
   key_name = var.key_name
